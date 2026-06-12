@@ -2,7 +2,8 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <!-- Zoom deaktiviert -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
   <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -10,7 +11,11 @@
   <meta name="theme-color" content="#1e2a38"/>
   <title>FixkostenPlaner</title>
 
-  <!-- PWA Icon (SVG inline als Data-URL) wird unten per JS gesetzt -->
+  <!-- Apple Homescreen Icon — verweist auf icon.png -->
+  <link rel="apple-touch-icon" sizes="180x180" href="icon.png"/>
+  <link rel="apple-touch-icon" sizes="152x152" href="icon.png"/>
+  <link rel="apple-touch-icon" sizes="120x120" href="icon.png"/>
+  <link rel="icon" type="image/png" href="icon.png"/>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
@@ -811,9 +816,104 @@ function speichern(){
 function loeschen(id){const p=posten.find(x=>x.id===id);if(confirm(`"${p.name}" wirklich löschen?`)){posten=posten.filter(x=>x.id!==id);update();}}
 
 /* ══════════════════════════════════════════════════════════
-   START
+   LOKALES SPEICHERN & LADEN
+   ─────────────────────────────────────────────────────────
+   Alles wird automatisch im Gerät gespeichert (localStorage).
+   Das bedeutet:
+   • Daten bleiben erhalten wenn du die App schließt
+   • Daten bleiben erhalten nach Neustart des Handys
+   • Jeder Nutzer hat seine eigenen Daten auf seinem Gerät
+   • Keine Internetverbindung nötig zum Speichern
+   ─────────────────────────────────────────────────────────
+   Gespeichert werden 3 Dinge:
+   1. "fkp_posten"     → alle Fixkosten-Posten
+   2. "fkp_kategorien" → alle Kategorien (inkl. eigene)
+   3. "fkp_nextid"     → laufende ID für neue Posten
 ══════════════════════════════════════════════════════════ */
-update();
+
+const SPEICHER_POSTEN    = 'fkp_posten';
+const SPEICHER_KATEGORIEN= 'fkp_kategorien';
+const SPEICHER_NEXTID    = 'fkp_nextid';
+
+/* Alles speichern — wird nach jeder Änderung aufgerufen */
+function allesSpeichern() {
+  try {
+    localStorage.setItem(SPEICHER_POSTEN,     JSON.stringify(posten));
+    localStorage.setItem(SPEICHER_KATEGORIEN, JSON.stringify(kategorien));
+    localStorage.setItem(SPEICHER_NEXTID,     String(nextId));
+  } catch(e) {
+    /* Falls localStorage voll ist (selten) — App läuft trotzdem weiter */
+    console.warn('Speichern fehlgeschlagen:', e);
+  }
+}
+
+/* Beim Start laden — gibt true zurück wenn Daten gefunden wurden */
+function allesLaden() {
+  try {
+    const gespeichertePosten = localStorage.getItem(SPEICHER_POSTEN);
+    const gespeicherteKat    = localStorage.getItem(SPEICHER_KATEGORIEN);
+    const gespeicherteId     = localStorage.getItem(SPEICHER_NEXTID);
+
+    if (gespeichertePosten)  posten     = JSON.parse(gespeichertePosten);
+    if (gespeicherteId)      nextId     = parseInt(gespeicherteId, 10);
+
+    if (gespeicherteKat) {
+      /* Gespeicherte Kategorien laden, aber Standard-Kategorien immer
+         ergänzen falls neue hinzugekommen sind (z.B. nach einem Update) */
+      const geladen = JSON.parse(gespeicherteKat);
+      STD_KAT.forEach(std => {
+        if (!geladen.find(k => k.name === std.name)) geladen.unshift({...std});
+      });
+      kategorien = geladen;
+    }
+
+    return !!(gespeichertePosten || gespeicherteKat);
+  } catch(e) {
+    console.warn('Laden fehlgeschlagen:', e);
+    return false;
+  }
+}
+
+/* ── update() um Speichern erweitern ─────────────────────
+   Original update() bleibt gleich, wird nur danach gespeichert */
+const _updateOriginal = update;
+update = function() {
+  _updateOriginal();
+  allesSpeichern();
+};
+
+/* ── Auch Kategorie-Änderungen speichern ─────────────────
+   Alle Funktionen die Kategorien ändern rufen update() auf,
+   damit wird automatisch mitgespeichert. ✅ */
+
+/* ══════════════════════════════════════════════════════════
+   SPEICHER-STATUS ANZEIGE
+   Kleines Symbol oben rechts zeigt ob gespeichert wurde
+══════════════════════════════════════════════════════════ */
+function speicherStatusZeigen() {
+  /* Kurz ein "✓ Gespeichert" im Header anzeigen */
+  const sub = document.getElementById('hdr-sub');
+  const original = sub.textContent;
+  sub.textContent = '✓ Gespeichert';
+  sub.style.color = '#2dd4bf';
+  setTimeout(() => {
+    sub.style.color = '';
+    sub.textContent = original;
+  }, 1500);
+}
+
+/* update() nochmal erweitern um Status-Anzeige */
+const _updateMitSpeichern = update;
+update = function() {
+  _updateMitSpeichern();
+  speicherStatusZeigen();
+};
+
+/* ══════════════════════════════════════════════════════════
+   START — Daten laden, dann App starten
+══════════════════════════════════════════════════════════ */
+allesLaden();   /* ← zuerst gespeicherte Daten laden */
+_updateOriginal(); /* ← App aufbauen ohne Speicher-Feedback beim Start */
 kalZeichnen();
 </script>
 </body>
