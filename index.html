@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="FixkostenPlaner"/>
+  <meta name="theme-color" content="#1e2a38"/>
+  <title>FixkostenPlaner</title>
+
+  <!-- PWA Icon (SVG inline als Data-URL) wird unten per JS gesetzt -->
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-page:     #16212e;
+      --bg-header:   #1e2a38;
+      --bg-karte:    #1e2a38;
+      --bg-tief:     #16212e;
+      --rand:        #253347;
+      --rand2:       #2d4060;
+      --akzent:      #0d9488;
+      --akzent-hell: #2dd4bf;
+      --gruen:       #22c55e;
+      --gruen-hell:  #4ade80;
+      --rot:         #ef4444;
+      --rot-hell:    #f87171;
+      --gelb:        #f59e0b;
+      --gelb-hell:   #fbbf24;
+      --text1:       #f0f4f8;
+      --text2:       #94a3b8;
+      --text3:       #4b6480;
+      --radius:      10px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg-page);
+      color: var(--text1);
+      font-size: 14px;
+      min-height: 100vh;
+      /* Safe area für iPhone Notch */
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    /* ── HEADER ─────────────────────────────────────────────── */
+    header {
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--rand);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .hdr-links { display: flex; align-items: center; gap: 10px; }
+    .hdr-icon-wrap {
+      width: 38px; height: 38px; flex-shrink: 0;
+    }
+    .hdr-name { font-size: 1rem; font-weight: 700; }
+    .hdr-sub  { font-size: 0.72rem; color: var(--text3); margin-top: 1px; }
+    .hdr-saldo {
+      background: var(--bg-tief);
+      border: 1px solid var(--rand2);
+      border-radius: var(--radius);
+      padding: 7px 14px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .hdr-saldo .lbl  { font-size: 0.62rem; color: var(--text3); text-transform: uppercase; letter-spacing: .07em; }
+    .hdr-saldo .wert { font-size: 1.3rem; font-weight: 800; color: var(--akzent-hell); line-height: 1.1; }
+    .hdr-saldo .sub  { font-size: 0.65rem; color: var(--text3); margin-top: 1px; }
+
+    /* ── TABS ────────────────────────────────────────────────── */
+    .tabs {
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--rand);
+      display: flex;
+      padding: 0 16px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      position: sticky;
+      top: 67px;
+      z-index: 49;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      padding: 11px 14px;
+      border: none; background: none;
+      font-family: inherit; font-size: 0.82rem; font-weight: 600;
+      color: var(--text3); cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color .15s, border-color .15s;
+      white-space: nowrap;
+    }
+    .tab-btn.aktiv { color: var(--akzent-hell); border-bottom-color: var(--akzent); }
+    .tab-btn:hover:not(.aktiv) { color: var(--text2); }
+
+    /* ── MAIN ────────────────────────────────────────────────── */
+    main { max-width: 1150px; margin: 0 auto; padding: 20px 16px; }
+    .seite { display: none; flex-direction: column; gap: 16px; }
+    .seite.aktiv { display: flex; }
+
+    /* ── KARTE ───────────────────────────────────────────────── */
+    .karte { background: var(--bg-karte); border-radius: var(--radius); border: 1px solid var(--rand); padding: 16px 20px; }
+    .karte-kopf { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
+    .karte-titel { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--text3); }
+
+    /* ── KENNZAHLEN ──────────────────────────────────────────── */
+    .kenn-zeile { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .kenn-karte { background: var(--bg-karte); border-radius: var(--radius); border: 1px solid var(--rand); padding: 14px 16px; border-left: 3px solid var(--rand); }
+    .kenn-karte.teal  { border-left-color: var(--akzent); }
+    .kenn-karte.gruen { border-left-color: var(--gruen); }
+    .kenn-karte.gelb  { border-left-color: var(--gelb); }
+    .kenn-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing:.07em; color: var(--text3); margin-bottom: 5px; }
+    .kenn-wert  { font-size: 1.55rem; font-weight: 800; line-height: 1; }
+    .kenn-karte.teal  .kenn-wert { color: var(--akzent-hell); }
+    .kenn-karte.gruen .kenn-wert { color: var(--gruen-hell); }
+    .kenn-karte.gelb  .kenn-wert { color: var(--gelb-hell); }
+    .kenn-sub { font-size: 0.7rem; color: var(--text3); margin-top: 4px; }
+
+    /* ── CHARTS ──────────────────────────────────────────────── */
+    .chart-zeile { display: grid; grid-template-columns: 1.55fr 1fr; gap: 16px; align-items: start; }
+    .chart-wrap  { position: relative; height: 270px; }
+    .chart-legende { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
+    .cl { display: flex; align-items: center; gap: 5px; font-size: 0.72rem; color: var(--text2); }
+    .cl-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .kuchen-wrap { position: relative; height: 200px; }
+    .kuchen-legende { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; }
+    .kl-zeile { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.76rem; padding: 4px 0; border-bottom: 1px solid var(--rand); }
+    .kl-zeile:last-child { border-bottom: none; }
+    .kl-links  { display: flex; align-items: center; gap: 6px; }
+    .kl-farbe  { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .kl-name   { color: var(--text2); }
+    .kl-rechts { display: flex; align-items: center; gap: 8px; }
+    .kl-pct  { color: var(--text1); font-weight: 700; min-width: 34px; text-align: right; }
+    .kl-eur  { color: var(--text3); font-size: 0.7rem; min-width: 56px; text-align: right; }
+
+    /* ── TABELLE ─────────────────────────────────────────────── */
+    .tw { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    thead th { text-align: left; padding: 8px 11px; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--text3); border-bottom: 1px solid var(--rand); }
+    thead th.r { text-align: right; }
+    tbody tr { border-bottom: 1px solid var(--rand); transition: background .1s; }
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+    tbody td { padding: 9px 11px; }
+    tbody td.r { text-align: right; }
+    tbody td.dim { color: var(--text3); font-size: 0.78rem; }
+
+    /* ── BADGE ───────────────────────────────────────────────── */
+    .badge { display: inline-block; padding: 2px 7px; border-radius: 99px; font-size: 0.68rem; font-weight: 700; }
+    .bm  { background: rgba(13,148,136,.18);  color: var(--akzent-hell); }
+    .bq  { background: rgba(245,158,11,.15);  color: var(--gelb-hell); }
+    .bhj { background: rgba(34,197,94,.12);   color: var(--gruen-hell); }
+    .bj  { background: rgba(139,92,246,.18);  color: #c4b5fd; }
+    .bald      { color: var(--gelb-hell); font-weight: 700; }
+    .sehr-bald { color: var(--rot-hell);  font-weight: 700; }
+
+    /* ── BUTTONS ─────────────────────────────────────────────── */
+    .btn { padding: 8px 14px; border: none; border-radius: 8px; font-family: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; transition: opacity .15s; }
+    .btn:hover { opacity: .85; }
+    .btn-teal { background: var(--akzent); color: #fff; }
+    .btn-grau { background: var(--bg-tief); color: var(--text2); border: 1px solid var(--rand); }
+    .icon-btn { background: none; border: none; cursor: pointer; font-size: 1rem; padding: 4px 6px; border-radius: 6px; color: var(--text3); transition: background .15s, color .15s; }
+    .icon-btn:hover { background: rgba(255,255,255,.06); color: var(--text1); }
+
+    /* ── LEER-ZUSTAND ────────────────────────────────────────── */
+    .leer-seite { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 50px 20px; gap: 12px; text-align: center; }
+    .leer-seite .emoji { font-size: 2.8rem; }
+    .leer-seite h2 { font-size: 1.05rem; font-weight: 700; color: var(--text2); }
+    .leer-seite p  { font-size: 0.82rem; color: var(--text3); max-width: 320px; line-height: 1.6; }
+    .leer-hint { text-align: center; padding: 22px; color: var(--text3); font-size: 0.83rem; }
+
+    /* ── MODAL ───────────────────────────────────────────────── */
+    .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 200; align-items: center; justify-content: center; padding: 16px; }
+    .modal-bg.offen { display: flex; }
+    .modal { background: var(--bg-karte); border: 1px solid var(--rand2); border-radius: 14px; padding: 22px 22px 18px; width: 460px; max-width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 12px 50px rgba(0,0,0,.55); }
+    .modal h2 { font-size: 0.98rem; font-weight: 700; margin-bottom: 14px; }
+    .fg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+    .fg-grid .voll { grid-column: 1/-1; }
+    .fg { display: flex; flex-direction: column; }
+    .fg label { font-size: 0.65rem; font-weight: 700; color: var(--text3); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .06em; }
+    .fg input, .fg select { width: 100%; padding: 9px 10px; background: var(--bg-tief); border: 1px solid var(--rand2); border-radius: 8px; font-family: inherit; font-size: 0.88rem; color: var(--text1); transition: border-color .15s; }
+    .fg input:focus, .fg select:focus { outline: none; border-color: var(--akzent); }
+    .fg select option { background: var(--bg-karte); }
+    .modal-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+    .modal-trenner { border: none; border-top: 1px solid var(--rand); margin: 14px 0; }
+
+    /* ── KATEGORIE-SEITE ─────────────────────────────────────── */
+    .kat-liste { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    .kat-zeile { display: flex; align-items: center; gap: 9px; background: var(--bg-tief); border: 1px solid var(--rand); border-radius: 8px; padding: 8px 11px; }
+    .kat-farb-kreis { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; border: 2px solid rgba(255,255,255,.2); }
+    .kat-name-text { flex: 1; font-size: 0.87rem; }
+    .kat-standard-badge { font-size: 0.63rem; color: var(--text3); background: var(--rand); padding: 2px 6px; border-radius: 99px; }
+    .neue-kat-zeile { display: flex; gap: 8px; align-items: center; }
+    .neue-kat-zeile input { flex: 1; padding: 9px 10px; background: var(--bg-tief); border: 1px solid var(--rand2); border-radius: 8px; font-family: inherit; font-size: 0.87rem; color: var(--text1); }
+    .neue-kat-zeile input:focus { outline: none; border-color: var(--akzent); }
+    .farb-picker { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
+    .farb-option { width: 21px; height: 21px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform .15s, border-color .15s; }
+    .farb-option:hover { transform: scale(1.2); }
+    .farb-option.gewaehlt { border-color: #fff; transform: scale(1.15); }
+
+    /* ── KALENDER ────────────────────────────────────────────── */
+    .kal-nav { display: flex; align-items: center; gap: 10px; }
+    .kal-monat { font-size: 0.92rem; font-weight: 700; min-width: 160px; text-align: center; }
+    .kal-wt-zeile { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; margin-top: 10px; }
+    .kal-wt { text-align: center; font-size: 0.65rem; font-weight: 700; color: var(--text3); padding: 3px; text-transform: uppercase; }
+    .kal-tage { display: grid; grid-template-columns: repeat(7,1fr); gap: 3px; }
+    .kal-tag { min-height: 64px; border: 1px solid var(--rand); border-radius: 7px; padding: 4px 5px; background: var(--bg-tief); }
+    .kal-tag.leer { background: transparent; border-color: transparent; }
+    .kal-tag.heute { border-color: var(--akzent); border-width: 2px; }
+    .kal-nr { font-size: 0.7rem; font-weight: 700; color: var(--text3); margin-bottom: 2px; }
+    .kal-tag.heute .kal-nr { color: var(--akzent-hell); }
+    .kal-ev { font-size: 0.6rem; font-weight: 600; background: rgba(239,68,68,.18); color: var(--rot-hell); border-radius: 3px; padding: 2px 4px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .summen-zeile { margin-top: 12px; padding: 10px 13px; background: var(--bg-tief); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--rand); }
+
+    /* ── INSTALL-BANNER ──────────────────────────────────────── */
+    #install-banner {
+      display: none;
+      background: var(--akzent);
+      color: #fff;
+      padding: 10px 16px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    #install-banner.sichtbar { display: flex; }
+    #install-banner button { background: rgba(255,255,255,.2); border: none; color: #fff; padding: 5px 12px; border-radius: 6px; font-family: inherit; font-weight: 700; cursor: pointer; font-size: 0.8rem; }
+
+    /* ── RESPONSIVE ──────────────────────────────────────────── */
+    @media (max-width: 750px) {
+      .chart-zeile { grid-template-columns: 1fr; }
+      .kenn-zeile  { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 480px) {
+      .kenn-zeile { grid-template-columns: 1fr; }
+      .fg-grid    { grid-template-columns: 1fr; }
+      .fg-grid .voll { grid-column: 1; }
+      .hdr-saldo .wert { font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- PWA-Installations-Banner (erscheint nur auf Android / Desktop Chrome) -->
+<div id="install-banner">
+  <span>📱 FixkostenPlaner zum Homescreen hinzufügen</span>
+  <button onclick="pwaInstallieren()">Installieren</button>
+  <button onclick="document.getElementById('install-banner').classList.remove('sichtbar')" style="background:rgba(255,255,255,.1)">✕</button>
+</div>
+
+<header>
+  <div class="hdr-links">
+    <!-- App-Icon SVG -->
+    <div class="hdr-icon-wrap">
+      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
+        <!-- Hintergrund -->
+        <rect width="100" height="100" rx="22" fill="#f0f4f8"/>
+        <!-- Kalender Körper -->
+        <rect x="10" y="22" width="60" height="52" rx="7" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
+        <!-- Kalender Kopf -->
+        <rect x="10" y="22" width="60" height="18" rx="7" fill="#1e3a6e"/>
+        <rect x="10" y="31" width="60" height="9" fill="#1e3a6e"/>
+        <!-- Kalender Ringe -->
+        <rect x="27" y="16" width="5" height="12" rx="2.5" fill="#1e3a6e"/>
+        <rect x="48" y="16" width="5" height="12" rx="2.5" fill="#1e3a6e"/>
+        <!-- Kalender Kästchen -->
+        <rect x="16" y="46" width="7" height="7" rx="2" fill="#e2e8f0"/>
+        <rect x="27" y="46" width="7" height="7" rx="2" fill="#3b82f6"/>
+        <rect x="38" y="46" width="7" height="7" rx="2" fill="#e2e8f0"/>
+        <rect x="49" y="46" width="7" height="7" rx="2" fill="#e2e8f0"/>
+        <rect x="16" y="57" width="7" height="7" rx="2" fill="#e2e8f0"/>
+        <rect x="27" y="57" width="7" height="7" rx="2" fill="#7c3aed"/>
+        <rect x="38" y="57" width="7" height="7" rx="2" fill="#e2e8f0"/>
+        <rect x="49" y="57" width="7" height="7" rx="2" fill="#10b981"/>
+        <!-- Kurvendiagramm -->
+        <polyline points="8,82 28,68 48,72 68,52 88,38" fill="none" stroke="#22c55e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="8"  cy="82" r="3.5" fill="#fff" stroke="#22c55e" stroke-width="2.5"/>
+        <circle cx="28" cy="68" r="3.5" fill="#fff" stroke="#22c55e" stroke-width="2.5"/>
+        <circle cx="48" cy="72" r="3.5" fill="#fff" stroke="#22c55e" stroke-width="2.5"/>
+        <circle cx="68" cy="52" r="3.5" fill="#fff" stroke="#22c55e" stroke-width="2.5"/>
+        <circle cx="88" cy="38" r="3.5" fill="#fff" stroke="#22c55e" stroke-width="2.5"/>
+        <!-- Grüner Flächen-Gradient unter Kurve -->
+        <polygon points="8,82 28,68 48,72 68,52 88,38 88,95 8,95" fill="rgba(34,197,94,0.12)"/>
+        <!-- Euro-Karte -->
+        <rect x="22" y="68" width="38" height="24" rx="5" fill="#1e3a6e"/>
+        <text x="32" y="84" font-size="14" font-weight="bold" fill="#fff">€</text>
+        <rect x="44" y="76" width="12" height="2.5" rx="1.2" fill="rgba(255,255,255,0.5)"/>
+        <rect x="44" y="81" width="8" height="2.5" rx="1.2" fill="rgba(255,255,255,0.3)"/>
+        <!-- Häkchen-Kreis -->
+        <circle cx="80" cy="32" r="12" fill="#22c55e"/>
+        <polyline points="74,32 79,37 87,26" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="hdr-name">FixkostenPlaner</div>
+      <div class="hdr-sub">Automatische Deckungsplanung</div>
+    </div>
+  </div>
+  <div class="hdr-saldo">
+    <div class="lbl">Monatlich einzahlen</div>
+    <div class="wert" id="hdr-einzahlung">—</div>
+    <div class="sub"  id="hdr-sub">Noch keine Posten</div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn aktiv" onclick="zeigeSeite('uebersicht',this)">📊 Übersicht</button>
+  <button class="tab-btn"       onclick="zeigeSeite('kalender',this)">📅 Kalender</button>
+  <button class="tab-btn"       onclick="zeigeSeite('posten',this)">⚙️ Fixkosten</button>
+  <button class="tab-btn"       onclick="zeigeSeite('kategorien',this)">🏷️ Kategorien</button>
+</div>
+
+<main>
+
+  <!-- ══ ÜBERSICHT ════════════════════════════════════════════ -->
+  <div class="seite aktiv" id="seite-uebersicht">
+    <div class="kenn-zeile">
+      <div class="kenn-karte teal">
+        <div class="kenn-label">Monatliche Einzahlung</div>
+        <div class="kenn-wert" id="kz-einzahlung">—</div>
+        <div class="kenn-sub">Jeden Monat einzuzahlen</div>
+      </div>
+      <div class="kenn-karte gruen">
+        <div class="kenn-label">Jährliche Fixkosten</div>
+        <div class="kenn-wert" id="kz-jahressumme">—</div>
+        <div class="kenn-sub">Summe aller Posten/Jahr</div>
+      </div>
+      <div class="kenn-karte gelb">
+        <div class="kenn-label">Nächste Abbuchung</div>
+        <div class="kenn-wert" id="kz-naechste-wert">—</div>
+        <div class="kenn-sub" id="kz-naechste-info">—</div>
+      </div>
+    </div>
+
+    <div class="chart-zeile">
+      <div class="karte">
+        <div class="karte-kopf">
+          <div class="karte-titel">📈 Kontostand-Prognose — 12 Monate</div>
+          <div style="font-size:0.68rem;color:var(--text3)">Einzahlung am 1. jeden Monats</div>
+        </div>
+        <div class="chart-wrap"><canvas id="verlaufsChart"></canvas></div>
+        <div class="chart-legende">
+          <div class="cl"><div class="cl-dot" style="background:var(--akzent-hell)"></div>Gedeckt ✅</div>
+          <div class="cl"><div class="cl-dot" style="background:var(--rot-hell)"></div>Minus ⚠️</div>
+        </div>
+      </div>
+      <div class="karte">
+        <div class="karte-kopf"><div class="karte-titel">🥧 Kostenverteilung</div></div>
+        <div class="kuchen-wrap"><canvas id="kuchenChart"></canvas></div>
+        <div class="kuchen-legende" id="kuchen-legende"></div>
+      </div>
+    </div>
+
+    <div class="karte">
+      <div class="karte-kopf"><div class="karte-titel">⏰ Nächste Abbuchungen (30 Tage)</div></div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Posten</th><th>Kategorie</th><th>Intervall</th><th>Fällig am</th><th class="r">Betrag</th></tr></thead>
+          <tbody id="naechste-tabelle"></tbody>
+        </table>
+        <div class="leer-hint" id="naechste-leer" style="display:none">Keine Abbuchungen in den nächsten 30 Tagen.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ KALENDER ═════════════════════════════════════════════ -->
+  <div class="seite" id="seite-kalender">
+    <div class="karte">
+      <div class="karte-kopf">
+        <div class="kal-nav">
+          <button class="btn btn-grau" onclick="kalNav(-1)">◀</button>
+          <div class="kal-monat" id="kal-titel">—</div>
+          <button class="btn btn-grau" onclick="kalNav(+1)">▶</button>
+        </div>
+        <button class="btn btn-grau" onclick="kalNav(0)">Heute</button>
+      </div>
+      <div class="kal-wt-zeile">
+        <div class="kal-wt">Mo</div><div class="kal-wt">Di</div><div class="kal-wt">Mi</div>
+        <div class="kal-wt">Do</div><div class="kal-wt">Fr</div><div class="kal-wt">Sa</div><div class="kal-wt">So</div>
+      </div>
+      <div class="kal-tage" id="kal-tage"></div>
+      <div class="summen-zeile" style="margin-top:12px">
+        <span style="font-size:0.78rem;color:var(--text2);font-weight:600">Abbuchungen diesen Monat:</span>
+        <span style="font-weight:800;color:var(--rot-hell)" id="kal-monat-summe">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ FIXKOSTEN VERWALTEN ═══════════════════════════════════ -->
+  <div class="seite" id="seite-posten">
+    <div class="karte">
+      <div class="karte-kopf">
+        <div class="karte-titel">⚙️ Alle Fixkosten-Posten</div>
+        <button class="btn btn-teal" onclick="modalAuf()">+ Posten hinzufügen</button>
+      </div>
+      <div id="posten-inhalt"></div>
+      <div class="summen-zeile" id="posten-summen-zeile" style="display:none">
+        <span style="font-size:0.76rem;color:var(--text2);font-weight:600">Gesamte monatliche Last:</span>
+        <span style="font-weight:800;color:var(--akzent-hell);font-size:1rem" id="posten-summe">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ KATEGORIEN ═══════════════════════════════════════════ -->
+  <div class="seite" id="seite-kategorien">
+    <div class="karte">
+      <div class="karte-kopf"><div class="karte-titel">🏷️ Kategorien verwalten</div></div>
+      <p style="font-size:0.8rem;color:var(--text3);margin-bottom:14px;line-height:1.6">
+        <strong style="color:var(--text2)">Standard-Kategorien</strong> können nicht gelöscht werden.
+        Eigene Kategorien kannst du frei anlegen, umbenennen und löschen.
+      </p>
+      <div class="kat-liste" id="kat-liste"></div>
+      <hr class="modal-trenner">
+      <p style="font-size:0.68rem;color:var(--text3);margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Neue Kategorie</p>
+      <div class="neue-kat-zeile">
+        <input id="neue-kat-name" type="text" placeholder="Name der neuen Kategorie …" maxlength="40"/>
+        <button class="btn btn-teal" onclick="kategorieHinzufuegen()">+ Hinzufügen</button>
+      </div>
+      <div style="margin-top:10px">
+        <p style="font-size:0.68rem;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px">Farbe wählen</p>
+        <div class="farb-picker" id="farb-picker-neu"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- MODAL: Posten -->
+<div class="modal-bg" id="modal-bg" onclick="modalAuBei(event)">
+  <div class="modal">
+    <h2 id="modal-titel">Fixkosten-Posten</h2>
+    <div class="fg-grid">
+      <div class="fg voll"><label>Bezeichnung</label><input id="m-name" type="text" placeholder="z.B. Kfz-Versicherung"/></div>
+      <div class="fg"><label>Kategorie</label><select id="m-kat"></select></div>
+      <div class="fg"><label>Intervall</label>
+        <select id="m-intervall">
+          <option value="monatlich">Monatlich</option>
+          <option value="vierteljaehrlich">Vierteljährlich</option>
+          <option value="halbjaehrlich">Halbjährlich</option>
+          <option value="jaehrlich">Jährlich</option>
+        </select>
+      </div>
+      <div class="fg"><label>Betrag (€)</label><input id="m-betrag" type="number" min="0" step="0.01" placeholder="0,00"/></div>
+      <div class="fg"><label>Nächste Fälligkeit</label><input id="m-faellig" type="date"/></div>
+      <div class="fg voll"><label>Notiz (optional)</label><input id="m-notiz" type="text" placeholder="z.B. Anbieter, Vertragsnummer …"/></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-grau" onclick="modalZu()">Abbrechen</button>
+      <button class="btn btn-teal" onclick="speichern()">💾 Speichern</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Kategorie bearbeiten -->
+<div class="modal-bg" id="modal-kat-bg" onclick="katModalAuBei(event)">
+  <div class="modal" style="max-width:340px">
+    <h2>Kategorie bearbeiten</h2>
+    <div class="fg" style="margin-bottom:12px"><label>Name</label><input id="edit-kat-name" type="text" maxlength="40"/></div>
+    <p style="font-size:0.68rem;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px">Farbe</p>
+    <div class="farb-picker" id="farb-picker-edit"></div>
+    <div class="modal-btns" style="margin-top:16px">
+      <button class="btn btn-grau" onclick="katModalZu()">Abbrechen</button>
+      <button class="btn btn-teal" onclick="katSpeichern()">💾 Speichern</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   FARBPALETTE
+══════════════════════════════════════════════════════════ */
+const FARB_PALETTE=['#2dd4bf','#818cf8','#f97316','#38bdf8','#a78bfa',
+  '#facc15','#fb7185','#94a3b8','#34d399','#60a5fa',
+  '#f472b6','#c084fc','#4ade80','#22d3ee','#fbbf24',
+  '#e879f9','#86efac','#67e8f9','#fdba74','#a5b4fc'];
+
+/* ══════════════════════════════════════════════════════════
+   DATEN — beim ersten Start leer (Punkt 1 ✅)
+   Standard-Kategorien bleiben immer erhalten
+══════════════════════════════════════════════════════════ */
+const STD_KAT=[
+  {name:'Kredit',               farbe:'#2dd4bf',standard:true},
+  {name:'Versicherung',         farbe:'#818cf8',standard:true},
+  {name:'KfZ',                  farbe:'#f97316',standard:true},
+  {name:'Telefon / Internet',   farbe:'#38bdf8',standard:true},
+  {name:'Rundfunk / GEZ',       farbe:'#a78bfa',standard:true},
+  {name:'Strom / Gas / Wasser', farbe:'#facc15',standard:true},
+  {name:'Abo / Streaming',      farbe:'#fb7185',standard:true},
+  {name:'Sonstiges',            farbe:'#94a3b8',standard:true},
+];
+
+let kategorien = STD_KAT.map(k=>({...k}));
+let posten     = [];   // ← LEER bei Erststart (Punkt 1 ✅)
+let nextId     = 1;
+let editId     = null;
+let editKatIndex = null;
+let editKatFarbe = null;
+let neueKatFarbe = FARB_PALETTE[0];
+let kalDatum   = new Date();
+let verlaufsChart=null, kuchenChart=null;
+let pwaPrompt  = null;
+
+/* ══════════════════════════════════════════════════════════
+   PWA: Installations-Event abfangen (Chrome/Android/Desktop)
+══════════════════════════════════════════════════════════ */
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault();
+  pwaPrompt=e;
+  document.getElementById('install-banner').classList.add('sichtbar');
+});
+function pwaInstallieren(){
+  if(pwaPrompt){ pwaPrompt.prompt(); pwaPrompt.userChoice.then(()=>{ document.getElementById('install-banner').classList.remove('sichtbar'); }); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   HILFSFUNKTIONEN
+══════════════════════════════════════════════════════════ */
+const euro    =n=>n.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
+const datDE   =s=>{if(!s)return'–';const[j,m,t]=s.split('-');return`${t}.${m}.${j}`;};
+const heute   =()=>new Date().toISOString().split('T')[0];
+const jFaktor =i=>({monatlich:12,vierteljaehrlich:4,halbjaehrlich:2,jaehrlich:1}[i]||1);
+const moAnteil=p=>(p.betrag*jFaktor(p.intervall))/12;
+const katFarbe=name=>{const k=kategorien.find(k=>k.name===name);return k?k.farbe:'#94a3b8';};
+const badgeHtml=i=>{
+  const cl={monatlich:'bm',vierteljaehrlich:'bq',halbjaehrlich:'bhj',jaehrlich:'bj'};
+  const tx={monatlich:'Monatl.',vierteljaehrlich:'Vierteljährl.',halbjaehrlich:'Halbjährl.',jaehrlich:'Jährlich'};
+  return`<span class="badge ${cl[i]||''}">${tx[i]||i}</span>`;
+};
+
+function faelligkeiten(p,monate){
+  const liste=[],end=new Date();
+  end.setMonth(end.getMonth()+monate);
+  let a=new Date(p.faellig+'T00:00:00');
+  while(a>new Date()){
+    if(p.intervall==='monatlich')a.setMonth(a.getMonth()-1);
+    else if(p.intervall==='vierteljaehrlich')a.setMonth(a.getMonth()-3);
+    else if(p.intervall==='halbjaehrlich')a.setMonth(a.getMonth()-6);
+    else break;
+  }
+  while(a<=end){
+    if(a>=new Date(new Date().setHours(0,0,0,0)))liste.push(new Date(a));
+    if(p.intervall==='monatlich')a.setMonth(a.getMonth()+1);
+    else if(p.intervall==='vierteljaehrlich')a.setMonth(a.getMonth()+3);
+    else if(p.intervall==='halbjaehrlich')a.setMonth(a.getMonth()+6);
+    else if(p.intervall==='jaehrlich')a.setFullYear(a.getFullYear()+1);
+    else break;
+  }
+  return liste;
+}
+
+/* ══════════════════════════════════════════════════════════
+   TABS
+══════════════════════════════════════════════════════════ */
+function zeigeSeite(id,btn){
+  document.querySelectorAll('.seite').forEach(s=>s.classList.remove('aktiv'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('aktiv'));
+  document.getElementById('seite-'+id).classList.add('aktiv');
+  btn.classList.add('aktiv');
+  if(id==='kalender')  kalZeichnen();
+  if(id==='kategorien')katListeZeichnen();
+}
+
+/* ══════════════════════════════════════════════════════════
+   GESAMT-UPDATE
+══════════════════════════════════════════════════════════ */
+function update(){
+  const moSum=posten.reduce((s,p)=>s+moAnteil(p),0);
+  const jaSum=posten.reduce((s,p)=>s+p.betrag*jFaktor(p.intervall),0);
+  document.getElementById('hdr-einzahlung').textContent=posten.length?euro(moSum):'—';
+  document.getElementById('kz-einzahlung').textContent =posten.length?euro(moSum):'—';
+  document.getElementById('kz-jahressumme').textContent=posten.length?euro(jaSum):'—';
+
+  const bald=[];
+  posten.forEach(p=>{faelligkeiten(p,1).forEach(d=>{const diff=Math.round((d-new Date())/86400000);if(diff<=30)bald.push({p,d,diff});});});
+  bald.sort((a,b)=>a.d-b.d);
+
+  if(bald.length){const n=bald[0];
+    document.getElementById('kz-naechste-wert').textContent=euro(n.p.betrag);
+    document.getElementById('kz-naechste-info').textContent=`${n.p.name} · in ${n.diff} Tag${n.diff!==1?'en':''}`;
+    document.getElementById('hdr-sub').textContent=`Nächste: ${n.p.name} in ${n.diff} Tag${n.diff!==1?'en':''}`;
+  } else {
+    document.getElementById('kz-naechste-wert').textContent='—';
+    document.getElementById('kz-naechste-info').textContent='Keine in 30 Tagen';
+    document.getElementById('hdr-sub').textContent='Keine Abbuchungen in 30 Tagen';
+  }
+  postenTabelle();naechsteTabelle(bald);verlaufsChartZeichnen(moSum);kuchenChartZeichnen();katSelectFuellen();
+}
+
+/* ══════════════════════════════════════════════════════════
+   POSTEN-TABELLE
+══════════════════════════════════════════════════════════ */
+function postenTabelle(){
+  const div=document.getElementById('posten-inhalt');
+  const sumZ=document.getElementById('posten-summen-zeile');
+  const sumW=document.getElementById('posten-summe');
+  if(!posten.length){sumZ.style.display='none';
+    div.innerHTML=`<div class="leer-seite"><div class="emoji">📋</div><h2>Noch keine Posten</h2><p>Klicke auf <strong>+ Posten hinzufügen</strong> um deinen ersten Fixkosten-Posten anzulegen.</p></div>`;return;}
+  sumZ.style.display='flex';sumW.textContent=euro(posten.reduce((s,p)=>s+moAnteil(p),0))+' / Monat';
+  const sort=[...posten].sort((a,b)=>a.faellig.localeCompare(b.faellig));
+  div.innerHTML=`<div class="tw"><table><thead><tr><th>Bezeichnung</th><th>Kategorie</th><th>Intervall</th><th>Nächste Fälligkeit</th><th class="r">Betrag</th><th class="r">Pro Monat</th><th></th></tr></thead><tbody>${
+    sort.map(p=>{
+      const diff=Math.round((new Date(p.faellig+'T00:00:00')-new Date())/86400000);
+      let fH=datDE(p.faellig);
+      if(diff<=7&&diff>=0)fH=`<span class="sehr-bald">⚠️ ${datDE(p.faellig)}</span>`;
+      else if(diff<=30&&diff>=0)fH=`<span class="bald">🔔 ${datDE(p.faellig)}</span>`;
+      const farbe=katFarbe(p.kat);
+      return`<tr><td><strong>${p.name}</strong>${p.notiz?`<br><span class="dim">${p.notiz}</span>`:''}</td>
+        <td><span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:${farbe};flex-shrink:0"></span><span class="dim">${p.kat}</span></span></td>
+        <td>${badgeHtml(p.intervall)}</td><td>${fH}</td>
+        <td class="r" style="color:var(--rot-hell);font-weight:700">−${euro(p.betrag)}</td>
+        <td class="r" style="color:var(--akzent-hell);font-weight:700">${euro(moAnteil(p))}</td>
+        <td><button class="icon-btn" onclick="modalAuf(${p.id})" title="Bearbeiten">✏️</button>
+            <button class="icon-btn" onclick="loeschen(${p.id})" title="Löschen">🗑️</button></td></tr>`;
+    }).join('')
+  }</tbody></table></div>`;
+}
+
+/* ══════════════════════════════════════════════════════════
+   NÄCHSTE TABELLE
+══════════════════════════════════════════════════════════ */
+function naechsteTabelle(bald){
+  const tb=document.getElementById('naechste-tabelle');
+  const leer=document.getElementById('naechste-leer');
+  if(!bald.length){tb.innerHTML='';leer.style.display='block';return;}
+  leer.style.display='none';
+  tb.innerHTML=bald.map(({p,d,diff})=>{
+    const cls=diff<=7?'sehr-bald':(diff<=14?'bald':'');
+    return`<tr><td><strong>${p.name}</strong></td><td class="dim">${p.kat}</td><td>${badgeHtml(p.intervall)}</td>
+      <td class="${cls}">${datDE(d.toISOString().split('T')[0])} (in ${diff} Tag${diff!==1?'en':''})</td>
+      <td class="r" style="color:var(--rot-hell);font-weight:700">−${euro(p.betrag)}</td></tr>`;
+  }).join('');
+}
+
+/* ══════════════════════════════════════════════════════════
+   VERLAUFS-CHART
+══════════════════════════════════════════════════════════ */
+function verlaufsChartZeichnen(moSum){
+  const ctx=document.getElementById('verlaufsChart').getContext('2d');
+  if(verlaufsChart)verlaufsChart.destroy();
+  if(!posten.length){verlaufsChart=null;return;}
+  const jetzt=new Date();
+  let stand=(jetzt.getDate()/30)*moSum;
+  const labels=[],werte=[],punktFarben=[];
+  for(let m=0;m<13;m++){
+    const datum=new Date(jetzt.getFullYear(),jetzt.getMonth()+m,1);
+    labels.push(datum.toLocaleDateString('de-DE',{month:'short',year:'2-digit'}));
+    if(m>0)stand+=moSum;
+    posten.forEach(p=>{faelligkeiten(p,15).forEach(fd=>{if(fd.getFullYear()===datum.getFullYear()&&fd.getMonth()===datum.getMonth())stand-=p.betrag;});});
+    const g=Math.round(stand*100)/100;werte.push(g);punktFarben.push(g>=0?'#2dd4bf':'#f87171');
+  }
+  verlaufsChart=new Chart(ctx,{type:'line',data:{labels,datasets:[
+    {label:'Minus-Zone',data:werte.map(v=>Math.min(v,0)),fill:{target:{value:0},above:'rgba(239,68,68,0)',below:'rgba(239,68,68,0.18)'},borderWidth:0,pointRadius:0,tension:0.3},
+    {label:'Kontostand',data:werte,fill:false,borderWidth:2.5,tension:0.3,pointRadius:5,pointHoverRadius:7,
+      pointBackgroundColor:punktFarben,pointBorderColor:punktFarben,
+      segment:{borderColor:c=>c.p0.parsed.y>=0&&c.p1.parsed.y>=0?'#2dd4bf':c.p0.parsed.y<0&&c.p1.parsed.y<0?'#f87171':'#f59e0b'}}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{display:false},tooltip:{backgroundColor:'#1e2a38',borderColor:'#253347',borderWidth:1,titleColor:'#94a3b8',bodyColor:'#f0f4f8',padding:10,
+      callbacks:{label:c=>c.datasetIndex===0?null:` Kontostand: ${euro(c.parsed.y)}`,afterLabel:c=>c.datasetIndex===0?null:(c.parsed.y<0?'  ⚠️  Konto im Minus!':'  ✅  Konto gedeckt')},
+      filter:item=>item.datasetIndex!==0}},
+    scales:{
+      x:{grid:{color:'rgba(255,255,255,0.05)'},border:{color:'#253347'},ticks:{color:'#4b6480',font:{size:11}}},
+      y:{min:Math.floor((Math.min(...werte,0)-100)/100)*100,
+        grid:{color:c=>c.tick.value===0?'rgba(255,255,255,0.22)':'rgba(255,255,255,0.05)',lineWidth:c=>c.tick.value===0?2:1},
+        border:{color:'#253347',dash:[4,4]},
+        ticks:{color:'#4b6480',font:{size:11},maxTicksLimit:8,
+          callback:v=>Math.abs(v)>=1000?(v/1000).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})+' k€':v.toLocaleString('de-DE')+' €'}}
+    }}});
+}
+
+/* ══════════════════════════════════════════════════════════
+   KUCHEN-CHART
+══════════════════════════════════════════════════════════ */
+function kuchenChartZeichnen(){
+  const ctx=document.getElementById('kuchenChart').getContext('2d');
+  if(kuchenChart)kuchenChart.destroy();
+  const legDiv=document.getElementById('kuchen-legende');
+  if(!posten.length){legDiv.innerHTML='';kuchenChart=null;return;}
+  const map={};
+  posten.forEach(p=>{map[p.kat]=(map[p.kat]||0)+moAnteil(p);});
+  const gruppen=Object.entries(map).sort((a,b)=>b[1]-a[1]);
+  const gesamt=gruppen.reduce((s,[,v])=>s+v,0);
+  const farben=gruppen.map(([k])=>katFarbe(k));
+  kuchenChart=new Chart(ctx,{type:'doughnut',data:{labels:gruppen.map(([k])=>k),datasets:[{data:gruppen.map(([,v])=>v),backgroundColor:farben.map(f=>f+'cc'),borderColor:farben,borderWidth:2,hoverOffset:8}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{display:false},
+      tooltip:{backgroundColor:'#1e2a38',borderColor:'#253347',borderWidth:1,titleColor:'#94a3b8',bodyColor:'#f0f4f8',padding:10,
+        callbacks:{label:c=>{const pct=((c.parsed/gesamt)*100).toFixed(1);return` ${euro(c.parsed)}/Mo. (${pct}%)`;}}}}}});
+  legDiv.innerHTML=gruppen.map(([kat,wert])=>`<div class="kl-zeile">
+    <div class="kl-links"><div class="kl-farbe" style="background:${katFarbe(kat)}"></div><span class="kl-name">${kat}</span></div>
+    <div class="kl-rechts"><span class="kl-pct">${((wert/gesamt)*100).toFixed(1)}%</span><span class="kl-eur">${euro(wert)}/Mo.</span></div></div>`).join('');
+}
+
+/* ══════════════════════════════════════════════════════════
+   KATEGORIEN (Seite + Modal)
+══════════════════════════════════════════════════════════ */
+function katSelectFuellen(gewaehlt){
+  const sel=document.getElementById('m-kat');
+  sel.innerHTML=kategorien.map(k=>`<option value="${k.name}"${k.name===gewaehlt?' selected':''}>${k.name}</option>`).join('');
+}
+function katListeZeichnen(){
+  document.getElementById('kat-liste').innerHTML=kategorien.map((k,i)=>`
+    <div class="kat-zeile">
+      <div class="kat-farb-kreis" style="background:${k.farbe}"></div>
+      <span class="kat-name-text">${k.name}</span>
+      ${k.standard?'<span class="kat-standard-badge">Standard</span>':''}
+      <button class="icon-btn" onclick="katBearbeiten(${i})">✏️</button>
+      ${!k.standard?`<button class="icon-btn" onclick="katLoeschen(${i})">🗑️</button>`:'<span style="width:27px"></span>'}
+    </div>`).join('');
+  farbPickerAufbauen('farb-picker-neu',neueKatFarbe);
+}
+function farbPickerAufbauen(id,aktiv){
+  document.getElementById(id).innerHTML=FARB_PALETTE.map(f=>`<div class="farb-option${f===aktiv?' gewaehlt':''}" style="background:${f}" onclick="farbWaehlen('${id}','${f}')"></div>`).join('');
+}
+function farbWaehlen(id,farbe){
+  document.getElementById(id).querySelectorAll('.farb-option').forEach(el=>el.classList.toggle('gewaehlt',el.style.backgroundColor===farbe||el.style.background===farbe));
+  if(id==='farb-picker-neu')neueKatFarbe=farbe;
+  if(id==='farb-picker-edit')editKatFarbe=farbe;
+}
+function kategorieHinzufuegen(){
+  const name=document.getElementById('neue-kat-name').value.trim();
+  if(!name){alert('Bitte einen Namen eingeben.');return;}
+  if(kategorien.find(k=>k.name.toLowerCase()===name.toLowerCase())){alert('Diese Kategorie existiert bereits.');return;}
+  kategorien.push({name,farbe:neueKatFarbe,standard:false});
+  document.getElementById('neue-kat-name').value='';
+  neueKatFarbe=FARB_PALETTE[0];
+  katListeZeichnen();update();
+}
+function katBearbeiten(i){
+  editKatIndex=i;const k=kategorien[i];editKatFarbe=k.farbe;
+  document.getElementById('edit-kat-name').value=k.name;
+  farbPickerAufbauen('farb-picker-edit',k.farbe);
+  document.getElementById('modal-kat-bg').classList.add('offen');
+}
+function katModalZu(){document.getElementById('modal-kat-bg').classList.remove('offen');}
+function katModalAuBei(e){if(e.target.id==='modal-kat-bg')katModalZu();}
+function katSpeichern(){
+  const neuerName=document.getElementById('edit-kat-name').value.trim();
+  if(!neuerName){alert('Name darf nicht leer sein.');return;}
+  const k=kategorien[editKatIndex];const alt=k.name;
+  if(alt!==neuerName)posten.forEach(p=>{if(p.kat===alt)p.kat=neuerName;});
+  k.name=neuerName;k.farbe=editKatFarbe;
+  katModalZu();katListeZeichnen();update();
+}
+function katLoeschen(i){
+  const k=kategorien[i];
+  if(k.standard){alert('Standard-Kategorien können nicht gelöscht werden.');return;}
+  const n=posten.filter(p=>p.kat===k.name).length;
+  if(n>0){alert(`Die Kategorie "${k.name}" wird noch von ${n} Posten verwendet.\nBitte ändere zuerst die Kategorie dieser Posten.`);return;}
+  if(confirm(`Kategorie "${k.name}" wirklich löschen?`)){kategorien.splice(i,1);katListeZeichnen();update();}
+}
+
+/* ══════════════════════════════════════════════════════════
+   KALENDER
+══════════════════════════════════════════════════════════ */
+function kalNav(r){if(r===0)kalDatum=new Date();else kalDatum.setMonth(kalDatum.getMonth()+r);kalZeichnen();}
+function kalZeichnen(){
+  const j=kalDatum.getFullYear(),m=kalDatum.getMonth();
+  document.getElementById('kal-titel').textContent=new Date(j,m,1).toLocaleDateString('de-DE',{month:'long',year:'numeric'});
+  const tMap={};let moSum=0;
+  posten.forEach(p=>{faelligkeiten(p,18).forEach(fd=>{if(fd.getFullYear()===j&&fd.getMonth()===m){const t=fd.getDate();if(!tMap[t])tMap[t]=[];tMap[t].push({name:p.name,betrag:p.betrag});moSum+=p.betrag;}});});
+  document.getElementById('kal-monat-summe').textContent=euro(moSum);
+  let ersterWT=(new Date(j,m,1).getDay()+6)%7;
+  const tage=new Date(j,m+1,0).getDate(),heutStr=heute();
+  const div=document.getElementById('kal-tage');div.innerHTML='';
+  for(let i=0;i<ersterWT;i++){const d=document.createElement('div');d.className='kal-tag leer';div.appendChild(d);}
+  for(let t=1;t<=tage;t++){
+    const tStr=`${j}-${String(m+1).padStart(2,'0')}-${String(t).padStart(2,'0')}`;
+    const d=document.createElement('div');d.className='kal-tag'+(tStr===heutStr?' heute':'');
+    d.innerHTML=`<div class="kal-nr">${t}</div>`;
+    if(tMap[t])tMap[t].forEach(e=>{const ev=document.createElement('div');ev.className='kal-ev';ev.title=`${e.name}: ${euro(e.betrag)}`;ev.textContent=e.name;d.appendChild(ev);});
+    div.appendChild(d);
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   POSTEN-MODAL
+══════════════════════════════════════════════════════════ */
+function modalAuf(id=null){
+  editId=id;katSelectFuellen();
+  document.getElementById('modal-titel').textContent=id?'Posten bearbeiten':'Neuer Fixkosten-Posten';
+  if(id){const p=posten.find(x=>x.id===id);
+    document.getElementById('m-name').value=p.name;katSelectFuellen(p.kat);
+    document.getElementById('m-intervall').value=p.intervall;document.getElementById('m-betrag').value=p.betrag;
+    document.getElementById('m-faellig').value=p.faellig;document.getElementById('m-notiz').value=p.notiz;
+  } else {['m-name','m-betrag','m-notiz'].forEach(i=>document.getElementById(i).value='');document.getElementById('m-faellig').value=heute();}
+  document.getElementById('modal-bg').classList.add('offen');
+}
+function modalZu(){document.getElementById('modal-bg').classList.remove('offen');}
+function modalAuBei(e){if(e.target.id==='modal-bg')modalZu();}
+function speichern(){
+  const name=document.getElementById('m-name').value.trim();
+  const kat=document.getElementById('m-kat').value;
+  const intervall=document.getElementById('m-intervall').value;
+  const betrag=parseFloat(document.getElementById('m-betrag').value);
+  const faellig=document.getElementById('m-faellig').value;
+  const notiz=document.getElementById('m-notiz').value.trim();
+  if(!name||isNaN(betrag)||betrag<=0||!faellig){alert('Bitte alle Pflichtfelder ausfüllen (Bezeichnung, Betrag und Fälligkeit).');return;}
+  if(editId){const i=posten.findIndex(p=>p.id===editId);posten[i]={...posten[i],name,kat,intervall,betrag,faellig,notiz};}
+  else posten.push({id:nextId++,name,kat,intervall,betrag,faellig,notiz});
+  modalZu();update();
+}
+function loeschen(id){const p=posten.find(x=>x.id===id);if(confirm(`"${p.name}" wirklich löschen?`)){posten=posten.filter(x=>x.id!==id);update();}}
+
+/* ══════════════════════════════════════════════════════════
+   START
+══════════════════════════════════════════════════════════ */
+update();
+kalZeichnen();
+</script>
+</body>
+</html>
