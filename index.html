@@ -55,32 +55,39 @@
     header {
       background: var(--bg-header);
       border-bottom: 1px solid var(--rand);
-      padding: 14px 20px;
+      padding: 10px 20px;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
+      justify-content: center;
       position: sticky;
       top: 0;
       z-index: 50;
+      min-height: 68px;
     }
-    .hdr-links { display: flex; align-items: center; gap: 10px; }
-    .hdr-icon-wrap {
-      width: 38px; height: 38px; flex-shrink: 0;
-    }
-    .hdr-name { font-size: 1rem; font-weight: 700; }
-    .hdr-sub  { font-size: 0.72rem; color: var(--text3); margin-top: 1px; }
+    /* Zentrierte Saldo-Kachel — feste Breite verhindert Verschieben */
     .hdr-saldo {
-      background: var(--bg-tief);
-      border: 1px solid var(--rand2);
-      border-radius: var(--radius);
-      padding: 7px 14px;
-      text-align: right;
-      flex-shrink: 0;
+      text-align: center;
+      min-width: 260px;
+      max-width: 420px;
+      width: 100%;
     }
-    .hdr-saldo .lbl  { font-size: 0.62rem; color: var(--text3); text-transform: uppercase; letter-spacing: .07em; }
-    .hdr-saldo .wert { font-size: 1.3rem; font-weight: 800; color: var(--akzent-hell); line-height: 1.1; }
-    .hdr-saldo .sub  { font-size: 0.65rem; color: var(--text3); margin-top: 1px; }
+    .hdr-saldo .lbl  {
+      font-size: 0.62rem; color: var(--text3);
+      text-transform: uppercase; letter-spacing: .07em;
+      margin-bottom: 2px;
+    }
+    .hdr-saldo .wert {
+      font-size: 1.5rem; font-weight: 800; color: var(--akzent-hell);
+      line-height: 1.1;
+      /* Feste Mindesthöhe verhindert Springen */
+      min-height: 1.8rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .hdr-saldo .sub  {
+      font-size: 0.65rem; color: var(--text3); margin-top: 3px;
+      min-height: 0.9rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
 
     /* ── TABS ────────────────────────────────────────────────── */
     .tabs {
@@ -91,7 +98,7 @@
       overflow-x: auto;
       scrollbar-width: none;
       position: sticky;
-      top: 67px;
+      top: 68px;
       z-index: 49;
     }
     .tabs::-webkit-scrollbar { display: none; }
@@ -282,57 +289,10 @@
 </div>
 
 <header>
-  <div class="hdr-links">
-    <!-- App-Icon SVG -->
-    <div class="hdr-icon-wrap">
-      <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%">
-        <!-- Hintergrund -->
-        <rect width="100" height="100" rx="22" fill="#f0f4f8"/>
-        <!-- Kalender Körper -->
-        <rect x="10" y="22" width="60" height="52" rx="7" fill="#fff" stroke="#e2e8f0" stroke-width="1.5"/>
-        <!-- Kalender Kopf -->
-        <rect x="10" y="22" width="60" height="18" rx="7" fill="#1e3a6e"/>
-        <rect x="10" y="31" width="60" height="9" fill="#1e3a6e"/>
-        <!-- Kalender Ringe -->
-        <rect x="27" y="16" width="5" height="12" rx="2.5" fill="#1e3a6e"/>
-        <rect x="48" y="16" width="5" height="12" rx="2.5" fill="#1e3a6e"/>
-        <!-- Kalender Kästchen -->
-        <rect x="16" y="46" width="7" height="7" rx="2" fill="#e2e8f0"/>
-        <rect x="27" y="46" width="7" height="7" rx="2" fill="#3b82f6"/>
-        <rect x="38" y="46" width="7" height="7" rx="2" fill="#e2e8f0"/>
-        <rect x="49" y="46" width="7" height="7" rx="2" fill="#e2e8f0"/>
-        <rect x="16" y="57" width="7" height="7" rx="2" fill="#e2e8f0"/>
-        <rect x="27" y="57" width="7" height="7" rx="2" fill="#7c3aed"/>
-        <rect x="38" y="57" width="7" height="7" rx="2" fill="#e2e8f0"/>
-        <rect x="49" y="57" width="7" height="7" rx="2" fill="#10b981"/>
-        <!-- Kurvendiagramm -->
-        <polyline points="8,82 28,68 48,72 68,52 88,38" fill="none" stroke="#22c55e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-        <circle cx="8"  cy="82" r="3.5" fill="#fff" stroke="#22c55e" stroke-width="2.5"/>
-        <circle cx="28" cy="68" r="3.5" fill="#fff" stroke="#22c55e" stroke-width="2.5"/>
-        <circle cx="48" cy="72" r="3.5" fill="#fff" stroke="#22c55e" stroke-width="2.5"/>
-        <circle cx="68" cy="52" r="3.5" fill="#fff" stroke="#22c55e" stroke-width="2.5"/>
-        <circle cx="88" cy="38" r="3.5" fill="#fff" stroke="#22c55e" stroke-width="2.5"/>
-        <!-- Grüner Flächen-Gradient unter Kurve -->
-        <polygon points="8,82 28,68 48,72 68,52 88,38 88,95 8,95" fill="rgba(34,197,94,0.12)"/>
-        <!-- Euro-Karte -->
-        <rect x="22" y="68" width="38" height="24" rx="5" fill="#1e3a6e"/>
-        <text x="32" y="84" font-size="14" font-weight="bold" fill="#fff">€</text>
-        <rect x="44" y="76" width="12" height="2.5" rx="1.2" fill="rgba(255,255,255,0.5)"/>
-        <rect x="44" y="81" width="8" height="2.5" rx="1.2" fill="rgba(255,255,255,0.3)"/>
-        <!-- Häkchen-Kreis -->
-        <circle cx="80" cy="32" r="12" fill="#22c55e"/>
-        <polyline points="74,32 79,37 87,26" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </div>
-    <div>
-      <div class="hdr-name">FixkostenPlaner</div>
-      <div class="hdr-sub">Automatische Deckungsplanung</div>
-    </div>
-  </div>
   <div class="hdr-saldo">
-    <div class="lbl">Monatlich einzahlen</div>
+    <div class="lbl">Monatlicher Bedarf</div>
     <div class="wert" id="hdr-einzahlung">—</div>
-    <div class="sub"  id="hdr-sub">Noch keine Posten</div>
+    <div class="sub"  id="hdr-sub">Noch keine Posten angelegt</div>
   </div>
 </header>
 
