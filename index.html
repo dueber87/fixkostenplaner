@@ -226,6 +226,24 @@
     .kal-ev { font-size: 0.6rem; font-weight: 600; background: rgba(239,68,68,.18); color: var(--rot-hell); border-radius: 3px; padding: 2px 4px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .summen-zeile { margin-top: 12px; padding: 10px 13px; background: var(--bg-tief); border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--rand); }
 
+    /* ── TYP-TOGGLE (Eingang / Ausgang) ─────────────────────── */
+    .typ-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+    .typ-btn {
+      padding: 9px; border: 2px solid var(--rand2); border-radius: 8px;
+      background: var(--bg-tief); font-family: inherit; font-size: 0.85rem;
+      font-weight: 700; cursor: pointer; transition: all .15s; color: var(--text2);
+      text-align: center;
+    }
+    .typ-btn.ein.aktiv { border-color: var(--gruen); background: rgba(34,197,94,.12); color: var(--gruen-hell); }
+    .typ-btn.aus.aktiv { border-color: var(--rot);   background: rgba(239,68,68,.12);  color: var(--rot-hell); }
+    .typ-btn:not(.aktiv):hover { border-color: var(--text3); }
+
+    /* Kalender-Eingang-Event (grün statt rot) */
+    .kal-ev-ein { background: rgba(34,197,94,.18); color: var(--gruen-hell); }
+
+    /* Posten-Tabelle: Eingang-Zeile dezent hervorheben */
+    .zeile-eingang { background: rgba(34,197,94,.04); }
+
     /* ── INSTALL-BANNER ──────────────────────────────────────── */
     #install-banner {
       display: none;
@@ -331,19 +349,19 @@
   <div class="seite aktiv" id="seite-uebersicht">
     <div class="kenn-zeile">
       <div class="kenn-karte teal">
-        <div class="kenn-label">Monatliche Einzahlung</div>
+        <div class="kenn-label">Monatlicher Bedarf</div>
         <div class="kenn-wert" id="kz-einzahlung">—</div>
-        <div class="kenn-sub">Jeden Monat einzuzahlen</div>
+        <div class="kenn-sub">Gesamte Fixkosten pro Monat</div>
       </div>
       <div class="kenn-karte gruen">
         <div class="kenn-label">Jährliche Fixkosten</div>
         <div class="kenn-wert" id="kz-jahressumme">—</div>
-        <div class="kenn-sub">Summe aller Posten/Jahr</div>
+        <div class="kenn-sub">Summe aller Ausgänge/Jahr</div>
       </div>
       <div class="kenn-karte gelb">
-        <div class="kenn-label">Nächste Abbuchung</div>
+        <div class="kenn-label">Deckung / Differenz</div>
         <div class="kenn-wert" id="kz-naechste-wert">—</div>
-        <div class="kenn-sub" id="kz-naechste-info">—</div>
+        <div class="kenn-sub" id="kz-naechste-info">Eingänge minus Bedarf</div>
       </div>
     </div>
 
@@ -444,19 +462,30 @@
 <div class="modal-bg" id="modal-bg" onclick="modalAuBei(event)">
   <div class="modal">
     <h2 id="modal-titel">Fixkosten-Posten</h2>
+
+    <!-- Typ-Auswahl: Ausgang oder Eingang -->
+    <div style="margin-bottom:14px">
+      <p style="font-size:0.65rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Art der Buchung</p>
+      <div class="typ-toggle">
+        <button class="typ-btn aus aktiv" id="typ-aus" onclick="typWaehlen('ausgang')">▼ Ausgang (Fixkosten)</button>
+        <button class="typ-btn ein"       id="typ-ein" onclick="typWaehlen('eingang')">▲ Eingang (Gutschrift)</button>
+      </div>
+    </div>
+
     <div class="fg-grid">
       <div class="fg voll"><label>Bezeichnung</label><input id="m-name" type="text" placeholder="z.B. Kfz-Versicherung"/></div>
-      <div class="fg"><label>Kategorie</label><select id="m-kat"></select></div>
+      <div class="fg" id="fg-kat-wrap"><label>Kategorie</label><select id="m-kat"></select></div>
       <div class="fg"><label>Intervall</label>
-        <select id="m-intervall">
+        <select id="m-intervall" onchange="intervallGeaendert()">
           <option value="monatlich">Monatlich</option>
           <option value="vierteljaehrlich">Vierteljährlich</option>
           <option value="halbjaehrlich">Halbjährlich</option>
           <option value="jaehrlich">Jährlich</option>
+          <option value="einmalig">Einmalig (z.B. Startguthaben)</option>
         </select>
       </div>
       <div class="fg"><label>Betrag (€)</label><input id="m-betrag" type="number" min="0" step="0.01" placeholder="0,00"/></div>
-      <div class="fg"><label>Nächste Fälligkeit</label><input id="m-faellig" type="date"/></div>
+      <div class="fg" id="fg-faellig-wrap"><label id="faellig-label">Nächste Fälligkeit</label><input id="m-faellig" type="date"/></div>
       <div class="fg voll"><label>Notiz (optional)</label><input id="m-notiz" type="text" placeholder="z.B. Anbieter, Vertragsnummer …"/></div>
     </div>
     <div class="modal-btns">
@@ -533,16 +562,45 @@ function pwaInstallieren(){
 const euro    =n=>n.toLocaleString('de-DE',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
 const datDE   =s=>{if(!s)return'–';const[j,m,t]=s.split('-');return`${t}.${m}.${j}`;};
 const heute   =()=>new Date().toISOString().split('T')[0];
-const jFaktor =i=>({monatlich:12,vierteljaehrlich:4,halbjaehrlich:2,jaehrlich:1}[i]||1);
-const moAnteil=p=>(p.betrag*jFaktor(p.intervall))/12;
+const jFaktor =i=>({monatlich:12,vierteljaehrlich:4,halbjaehrlich:2,jaehrlich:1,einmalig:0}[i]??1);
 const katFarbe=name=>{const k=kategorien.find(k=>k.name===name);return k?k.farbe:'#94a3b8';};
+
+/* Monatlicher Anteil eines Postens (immer positiv) */
+function moAnteil(p) {
+  if(p.intervall==='einmalig') return 0;
+  return (p.betrag * jFaktor(p.intervall)) / 12;
+}
+
+/* BEDARF: Was das Konto monatlich an Ausgängen hat */
+function moBedarf() {
+  return posten
+    .filter(p => p.richtung !== 'eingang' && p.intervall !== 'einmalig')
+    .reduce((s,p) => s + moAnteil(p), 0);
+}
+
+/* EINGEPLANT: Was bereits als Einzahlung festgelegt ist */
+function moEingeplant() {
+  return posten
+    .filter(p => p.richtung === 'eingang' && p.intervall !== 'einmalig')
+    .reduce((s,p) => s + moAnteil(p), 0);
+}
+
+/* DIFFERENZ: positiv = überfinanziert, negativ = es fehlt noch */
+function moDifferenz() { return moEingeplant() - moBedarf(); }
+
 const badgeHtml=i=>{
-  const cl={monatlich:'bm',vierteljaehrlich:'bq',halbjaehrlich:'bhj',jaehrlich:'bj'};
-  const tx={monatlich:'Monatl.',vierteljaehrlich:'Vierteljährl.',halbjaehrlich:'Halbjährl.',jaehrlich:'Jährlich'};
+  const cl={monatlich:'bm',vierteljaehrlich:'bq',halbjaehrlich:'bhj',jaehrlich:'bj',einmalig:'bhj'};
+  const tx={monatlich:'Monatl.',vierteljaehrlich:'Vierteljährl.',halbjaehrlich:'Halbjährl.',jaehrlich:'Jährlich',einmalig:'Einmalig'};
   return`<span class="badge ${cl[i]||''}">${tx[i]||i}</span>`;
 };
 
-function faelligkeiten(p,monate){
+/* Alle zukünftigen Fälligkeiten — einmalige Posten haben genau einen Termin */
+function faelligkeiten(p, monate) {
+  if(p.intervall==='einmalig') {
+    const d = new Date(p.faellig+'T00:00:00');
+    const end = new Date(); end.setMonth(end.getMonth()+monate);
+    return (d >= new Date(new Date().setHours(0,0,0,0)) && d <= end) ? [d] : [];
+  }
   const liste=[],end=new Date();
   end.setMonth(end.getMonth()+monate);
   let a=new Date(p.faellig+'T00:00:00');
@@ -579,26 +637,56 @@ function zeigeSeite(id,btn){
    GESAMT-UPDATE
 ══════════════════════════════════════════════════════════ */
 function update(){
-  const moSum=posten.reduce((s,p)=>s+moAnteil(p),0);
-  const jaSum=posten.reduce((s,p)=>s+p.betrag*jFaktor(p.intervall),0);
-  document.getElementById('hdr-einzahlung').textContent=posten.length?euro(moSum):'—';
-  document.getElementById('kz-einzahlung').textContent =posten.length?euro(moSum):'—';
-  document.getElementById('kz-jahressumme').textContent=posten.length?euro(jaSum):'—';
+  const bedarf      = moBedarf();
+  const eingeplant  = moEingeplant();
+  const differenz   = moDifferenz();
+  const startGuth   = posten.filter(p=>p.intervall==='einmalig'&&p.richtung==='eingang').reduce((s,p)=>s+p.betrag,0);
+  const jaAusgaben  = posten.filter(p=>p.richtung!=='eingang'&&p.intervall!=='einmalig').reduce((s,p)=>s+p.betrag*jFaktor(p.intervall),0);
 
+  // Header zeigt immer den monatlichen Bedarf (was das Konto braucht)
+  document.getElementById('hdr-einzahlung').textContent = posten.length ? euro(bedarf) : '—';
+  document.getElementById('hdr-sub').textContent = eingeplant > 0
+    ? `Eingeplant: ${euro(eingeplant)} | Differenz: ${differenz>=0?'+':''}${euro(differenz)}`
+    : 'Noch keine Einzahlungen eingeplant';
+
+  // Kennzahl-Kacheln
+  document.getElementById('kz-einzahlung').textContent  = posten.length ? euro(bedarf)     : '—';
+  document.getElementById('kz-jahressumme').textContent = posten.length ? euro(jaAusgaben) : '—';
+
+  // Differenz-Kachel: grün wenn gedeckt, orange wenn nicht
+  const difEl  = document.getElementById('kz-naechste-wert');
+  const difInf = document.getElementById('kz-naechste-info');
+  if(eingeplant > 0){
+    difEl.textContent  = (differenz>=0?'+':'')+euro(differenz);
+    difInf.textContent = differenz >= 0 ? '✅ Konto gedeckt' : '⚠️ Fehlbetrag';
+    difEl.style.color  = differenz >= 0 ? 'var(--gruen-hell)' : 'var(--rot-hell)';
+  } else {
+    // Wenn noch keine Eingänge: nächste Abbuchung anzeigen wie vorher
+    const baldTest=[];
+    posten.filter(p=>p.richtung!=='eingang').forEach(p=>{
+      faelligkeiten(p,1).forEach(d=>{const diff=Math.round((d-new Date())/86400000);if(diff<=30)baldTest.push({p,d,diff});});
+    });
+    baldTest.sort((a,b)=>a.d-b.d);
+    if(baldTest.length){const n=baldTest[0];
+      difEl.textContent=euro(n.p.betrag);
+      difInf.textContent=`${n.p.name} · in ${n.diff} Tag${n.diff!==1?'en':''}`;
+    } else {
+      difEl.textContent='—'; difInf.textContent='Keine in 30 Tagen';
+    }
+    difEl.style.color='';
+  }
+
+  // Nächste Abbuchungen (nur Ausgänge)
   const bald=[];
-  posten.forEach(p=>{faelligkeiten(p,1).forEach(d=>{const diff=Math.round((d-new Date())/86400000);if(diff<=30)bald.push({p,d,diff});});});
+  posten.filter(p=>p.richtung!=='eingang').forEach(p=>{
+    faelligkeiten(p,1).forEach(d=>{
+      const diff=Math.round((d-new Date())/86400000);
+      if(diff<=30)bald.push({p,d,diff});
+    });
+  });
   bald.sort((a,b)=>a.d-b.d);
 
-  if(bald.length){const n=bald[0];
-    document.getElementById('kz-naechste-wert').textContent=euro(n.p.betrag);
-    document.getElementById('kz-naechste-info').textContent=`${n.p.name} · in ${n.diff} Tag${n.diff!==1?'en':''}`;
-    document.getElementById('hdr-sub').textContent=`Nächste: ${n.p.name} in ${n.diff} Tag${n.diff!==1?'en':''}`;
-  } else {
-    document.getElementById('kz-naechste-wert').textContent='—';
-    document.getElementById('kz-naechste-info').textContent='Keine in 30 Tagen';
-    document.getElementById('hdr-sub').textContent='Keine Abbuchungen in 30 Tagen';
-  }
-  postenTabelle();naechsteTabelle(bald);verlaufsChartZeichnen(moSum);kuchenChartZeichnen();katSelectFuellen();
+  postenTabelle();naechsteTabelle(bald);verlaufsChartZeichnen(bedarf, eingeplant, startGuth);kuchenChartZeichnen();katSelectFuellen();
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -610,28 +698,59 @@ function postenTabelle(){
   const sumW=document.getElementById('posten-summe');
   if(!posten.length){sumZ.style.display='none';
     div.innerHTML=`<div class="leer-seite"><div class="emoji">📋</div><h2>Noch keine Posten</h2><p>Klicke auf <strong>+ Posten hinzufügen</strong> um deinen ersten Fixkosten-Posten anzulegen.</p></div>`;return;}
-  sumZ.style.display='flex';sumW.textContent=euro(posten.reduce((s,p)=>s+moAnteil(p),0))+' / Monat';
-  const sort=[...posten].sort((a,b)=>a.faellig.localeCompare(b.faellig));
-  div.innerHTML=`<div class="tw"><table><thead><tr><th>Bezeichnung</th><th>Kategorie</th><th>Intervall</th><th>Nächste Fälligkeit</th><th class="r">Betrag</th><th class="r">Pro Monat</th><th></th></tr></thead><tbody>${
+  sumZ.style.display='flex';
+  // Summenzeile: Bedarf + was eingeplant ist
+  const bed=moBedarf(), gep=moEingeplant(), dif=moDifferenz();
+  sumW.innerHTML=`${euro(bed)}/Mo. Bedarf &nbsp;|&nbsp; ${euro(gep)}/Mo. eingeplant &nbsp;`
+    +`<span style="color:${dif>=0?'var(--gruen-hell)':'var(--rot-hell)'};font-weight:800">`
+    +`${dif>=0?'✅ +':'⚠️ '}${euro(dif)} Differenz</span>`;
+  const sort=[...posten].sort((a,b)=>{
+    // Eingänge zuerst, dann Ausgänge; innerhalb nach Fälligkeitsdatum
+    if(a.richtung==='eingang'&&b.richtung!=='eingang')return -1;
+    if(a.richtung!=='eingang'&&b.richtung==='eingang')return 1;
+    return a.faellig.localeCompare(b.faellig);
+  });
+  div.innerHTML=`<div class="tw"><table><thead><tr>
+    <th>Bezeichnung</th><th>Art</th><th>Kategorie</th><th>Intervall</th>
+    <th>Fälligkeit</th><th class="r">Betrag</th><th class="r">Pro Monat</th><th></th>
+  </tr></thead><tbody>${
     sort.map(p=>{
-      const diff=Math.round((new Date(p.faellig+'T00:00:00')-new Date())/86400000);
+      const diff=p.faellig?Math.round((new Date(p.faellig+'T00:00:00')-new Date())/86400000):999;
       let fH=datDE(p.faellig);
-      if(diff<=7&&diff>=0)fH=`<span class="sehr-bald">⚠️ ${datDE(p.faellig)}</span>`;
-      else if(diff<=30&&diff>=0)fH=`<span class="bald">🔔 ${datDE(p.faellig)}</span>`;
+      if(p.intervall!=='einmalig'){
+        if(diff<=7&&diff>=0)fH=`<span class="sehr-bald">⚠️ ${datDE(p.faellig)}</span>`;
+        else if(diff<=30&&diff>=0)fH=`<span class="bald">🔔 ${datDE(p.faellig)}</span>`;
+      }
       const farbe=katFarbe(p.kat);
-      return`<tr><td><strong>${p.name}</strong>${p.notiz?`<br><span class="dim">${p.notiz}</span>`:''}</td>
-        <td><span style="display:inline-flex;align-items:center;gap:5px;"><span style="width:8px;height:8px;border-radius:50%;background:${farbe};flex-shrink:0"></span><span class="dim">${p.kat}</span></span></td>
-        <td>${badgeHtml(p.intervall)}</td><td>${fH}</td>
-        <td class="r" style="color:var(--rot-hell);font-weight:700">−${euro(p.betrag)}</td>
-        <td class="r" style="color:var(--akzent-hell);font-weight:700">${euro(moAnteil(p))}</td>
-        <td><button class="icon-btn" onclick="modalAuf(${p.id})" title="Bearbeiten">✏️</button>
-            <button class="icon-btn" onclick="loeschen(${p.id})" title="Löschen">🗑️</button></td></tr>`;
+      const istEin=p.richtung==='eingang';
+      const artBadge=istEin
+        ?`<span style="font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:99px;background:rgba(34,197,94,.15);color:var(--gruen-hell)">▲ Eingang</span>`
+        :`<span style="font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:99px;background:rgba(239,68,68,.13);color:var(--rot-hell)">▼ Ausgang</span>`;
+      const moA = moAnteil(p);
+      const moStr = p.intervall==='einmalig'
+        ? `<span style="color:var(--text3);font-size:.78rem">einmalig</span>`
+        : `<span style="color:${istEin?'var(--gruen-hell)':'var(--akzent-hell)'};font-weight:700">${istEin?'+':''}${euro(Math.abs(moA))}</span>`;
+      return`<tr class="${istEin?'zeile-eingang':''}">
+        <td><strong>${p.name}</strong>${p.notiz?`<br><span class="dim">${p.notiz}</span>`:''}</td>
+        <td>${artBadge}</td>
+        <td><span style="display:inline-flex;align-items:center;gap:5px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${farbe};flex-shrink:0"></span>
+          <span class="dim">${p.kat||'—'}</span></span></td>
+        <td>${badgeHtml(p.intervall)}</td>
+        <td>${fH}</td>
+        <td class="r" style="color:${istEin?'var(--gruen-hell)':'var(--rot-hell)'};font-weight:700">${istEin?'+':'−'}${euro(p.betrag)}</td>
+        <td class="r">${moStr}</td>
+        <td>
+          <button class="icon-btn" onclick="modalAuf(${p.id})" title="Bearbeiten">✏️</button>
+          <button class="icon-btn" onclick="loeschen(${p.id})" title="Löschen">🗑️</button>
+        </td>
+      </tr>`;
     }).join('')
   }</tbody></table></div>`;
 }
 
 /* ══════════════════════════════════════════════════════════
-   NÄCHSTE TABELLE
+   NÄCHSTE TABELLE (nur Ausgänge)
 ══════════════════════════════════════════════════════════ */
 function naechsteTabelle(bald){
   const tb=document.getElementById('naechste-tabelle');
@@ -640,29 +759,48 @@ function naechsteTabelle(bald){
   leer.style.display='none';
   tb.innerHTML=bald.map(({p,d,diff})=>{
     const cls=diff<=7?'sehr-bald':(diff<=14?'bald':'');
-    return`<tr><td><strong>${p.name}</strong></td><td class="dim">${p.kat}</td><td>${badgeHtml(p.intervall)}</td>
+    return`<tr><td><strong>${p.name}</strong></td><td class="dim">${p.kat||'—'}</td><td>${badgeHtml(p.intervall)}</td>
       <td class="${cls}">${datDE(d.toISOString().split('T')[0])} (in ${diff} Tag${diff!==1?'en':''})</td>
       <td class="r" style="color:var(--rot-hell);font-weight:700">−${euro(p.betrag)}</td></tr>`;
   }).join('');
 }
 
 /* ══════════════════════════════════════════════════════════
-   VERLAUFS-CHART
+   VERLAUFS-CHART  (berücksichtigt jetzt Eingänge + Startguthaben)
 ══════════════════════════════════════════════════════════ */
-function verlaufsChartZeichnen(moSum){
+function verlaufsChartZeichnen(bedarf, eingeplant, startGuthaben){
   const ctx=document.getElementById('verlaufsChart').getContext('2d');
   if(verlaufsChart)verlaufsChart.destroy();
   if(!posten.length){verlaufsChart=null;return;}
+
   const jetzt=new Date();
-  let stand=(jetzt.getDate()/30)*moSum;
+  // Startkapital = anteilig angespartes Guthaben diesen Monat + einmalige Eingänge
+  // Eingeplant = was per Eingang-Posten regelmäßig einfliesst
+  // Bedarf     = was an Ausgängen monatlich gebraucht wird
+  // Der Chart zeigt: Kontostand = was tatsächlich drauf ist
+  const moNetto = eingeplant - bedarf; // positiv = wächst, negativ = schrumpft
+  let stand = (jetzt.getDate()/30)*eingeplant + startGuthaben;
   const labels=[],werte=[],punktFarben=[];
+
   for(let m=0;m<13;m++){
     const datum=new Date(jetzt.getFullYear(),jetzt.getMonth()+m,1);
     labels.push(datum.toLocaleDateString('de-DE',{month:'short',year:'2-digit'}));
-    if(m>0)stand+=moSum;
-    posten.forEach(p=>{faelligkeiten(p,15).forEach(fd=>{if(fd.getFullYear()===datum.getFullYear()&&fd.getMonth()===datum.getMonth())stand-=p.betrag;});});
-    const g=Math.round(stand*100)/100;werte.push(g);punktFarben.push(g>=0?'#2dd4bf':'#f87171');
+    if(m>0) stand += eingeplant; // alle Einzahlungen dieses Monats gutschreiben
+
+    // Alle Ausgänge dieses Monats abziehen
+    posten.filter(p=>p.richtung!=='eingang').forEach(p=>{
+      faelligkeiten(p,15).forEach(fd=>{
+        if(fd.getFullYear()===datum.getFullYear()&&fd.getMonth()===datum.getMonth()){
+          stand -= p.betrag;
+        }
+      });
+    });
+
+    const g=Math.round(stand*100)/100;
+    werte.push(g);
+    punktFarben.push(g>=0?'#2dd4bf':'#f87171');
   }
+
   verlaufsChart=new Chart(ctx,{type:'line',data:{labels,datasets:[
     {label:'Minus-Zone',data:werte.map(v=>Math.min(v,0)),fill:{target:{value:0},above:'rgba(239,68,68,0)',below:'rgba(239,68,68,0.18)'},borderWidth:0,pointRadius:0,tension:0.3},
     {label:'Kontostand',data:werte,fill:false,borderWidth:2.5,tension:0.3,pointRadius:5,pointHoverRadius:7,
@@ -683,15 +821,16 @@ function verlaufsChartZeichnen(moSum){
 }
 
 /* ══════════════════════════════════════════════════════════
-   KUCHEN-CHART
+   KUCHEN-CHART (nur Ausgänge, ohne Eingänge)
 ══════════════════════════════════════════════════════════ */
 function kuchenChartZeichnen(){
   const ctx=document.getElementById('kuchenChart').getContext('2d');
   if(kuchenChart)kuchenChart.destroy();
   const legDiv=document.getElementById('kuchen-legende');
-  if(!posten.length){legDiv.innerHTML='';kuchenChart=null;return;}
+  const ausgaenge=posten.filter(p=>p.richtung!=='eingang'&&p.intervall!=='einmalig');
+  if(!ausgaenge.length){legDiv.innerHTML='';kuchenChart=null;return;}
   const map={};
-  posten.forEach(p=>{map[p.kat]=(map[p.kat]||0)+moAnteil(p);});
+  ausgaenge.forEach(p=>{const ma=(p.betrag*jFaktor(p.intervall))/12;map[p.kat]=(map[p.kat]||0)+ma;});
   const gruppen=Object.entries(map).sort((a,b)=>b[1]-a[1]);
   const gesamt=gruppen.reduce((s,[,v])=>s+v,0);
   const farben=gruppen.map(([k])=>katFarbe(k));
@@ -705,7 +844,7 @@ function kuchenChartZeichnen(){
 }
 
 /* ══════════════════════════════════════════════════════════
-   KATEGORIEN (Seite + Modal)
+   KATEGORIEN
 ══════════════════════════════════════════════════════════ */
 function katSelectFuellen(gewaehlt){
   const sel=document.getElementById('m-kat');
@@ -764,14 +903,14 @@ function katLoeschen(i){
 }
 
 /* ══════════════════════════════════════════════════════════
-   KALENDER
+   KALENDER (Eingänge grün, Ausgänge rot)
 ══════════════════════════════════════════════════════════ */
 function kalNav(r){if(r===0)kalDatum=new Date();else kalDatum.setMonth(kalDatum.getMonth()+r);kalZeichnen();}
 function kalZeichnen(){
   const j=kalDatum.getFullYear(),m=kalDatum.getMonth();
   document.getElementById('kal-titel').textContent=new Date(j,m,1).toLocaleDateString('de-DE',{month:'long',year:'numeric'});
   const tMap={};let moSum=0;
-  posten.forEach(p=>{faelligkeiten(p,18).forEach(fd=>{if(fd.getFullYear()===j&&fd.getMonth()===m){const t=fd.getDate();if(!tMap[t])tMap[t]=[];tMap[t].push({name:p.name,betrag:p.betrag});moSum+=p.betrag;}});});
+  posten.forEach(p=>{faelligkeiten(p,18).forEach(fd=>{if(fd.getFullYear()===j&&fd.getMonth()===m){const t=fd.getDate();if(!tMap[t])tMap[t]=[];tMap[t].push({name:p.name,betrag:p.betrag,ein:p.richtung==='eingang'});if(p.richtung!=='eingang')moSum+=p.betrag;}});});
   document.getElementById('kal-monat-summe').textContent=euro(moSum);
   let ersterWT=(new Date(j,m,1).getDay()+6)%7;
   const tage=new Date(j,m+1,0).getDate(),heutStr=heute();
@@ -781,22 +920,61 @@ function kalZeichnen(){
     const tStr=`${j}-${String(m+1).padStart(2,'0')}-${String(t).padStart(2,'0')}`;
     const d=document.createElement('div');d.className='kal-tag'+(tStr===heutStr?' heute':'');
     d.innerHTML=`<div class="kal-nr">${t}</div>`;
-    if(tMap[t])tMap[t].forEach(e=>{const ev=document.createElement('div');ev.className='kal-ev';ev.title=`${e.name}: ${euro(e.betrag)}`;ev.textContent=e.name;d.appendChild(ev);});
+    if(tMap[t])tMap[t].forEach(e=>{
+      const ev=document.createElement('div');
+      ev.className='kal-ev'+(e.ein?' kal-ev-ein':'');
+      ev.title=`${e.ein?'▲':'▼'} ${e.name}: ${euro(e.betrag)}`;
+      ev.textContent=(e.ein?'▲ ':'▼ ')+e.name;
+      d.appendChild(ev);
+    });
     div.appendChild(d);
   }
 }
 
 /* ══════════════════════════════════════════════════════════
-   POSTEN-MODAL
+   MODAL — TYP-AUSWAHL & INTERVALL-LOGIK
 ══════════════════════════════════════════════════════════ */
+let aktuellerTyp = 'ausgang';
+
+function typWaehlen(typ){
+  aktuellerTyp=typ;
+  document.getElementById('typ-aus').classList.toggle('aktiv', typ==='ausgang');
+  document.getElementById('typ-ein').classList.toggle('aktiv', typ==='eingang');
+  // Bei Eingang: Kategorie ausblenden (optional), Intervall anpassen
+  const katWrap=document.getElementById('fg-kat-wrap');
+  katWrap.style.opacity = typ==='eingang' ? '0.5' : '1';
+  intervallGeaendert();
+}
+
+function intervallGeaendert(){
+  const iv=document.getElementById('m-intervall').value;
+  const label=document.getElementById('faellig-label');
+  if(iv==='einmalig') label.textContent='Datum des Eingangs';
+  else if(aktuellerTyp==='eingang') label.textContent='Nächster Eingang';
+  else label.textContent='Nächste Fälligkeit';
+}
+
 function modalAuf(id=null){
   editId=id;katSelectFuellen();
-  document.getElementById('modal-titel').textContent=id?'Posten bearbeiten':'Neuer Fixkosten-Posten';
-  if(id){const p=posten.find(x=>x.id===id);
-    document.getElementById('m-name').value=p.name;katSelectFuellen(p.kat);
-    document.getElementById('m-intervall').value=p.intervall;document.getElementById('m-betrag').value=p.betrag;
-    document.getElementById('m-faellig').value=p.faellig;document.getElementById('m-notiz').value=p.notiz;
-  } else {['m-name','m-betrag','m-notiz'].forEach(i=>document.getElementById(i).value='');document.getElementById('m-faellig').value=heute();}
+  document.getElementById('modal-titel').textContent=id?'Posten bearbeiten':'Neuer Posten';
+  if(id){
+    const p=posten.find(x=>x.id===id);
+    aktuellerTyp=p.richtung||'ausgang';
+    typWaehlen(aktuellerTyp);
+    document.getElementById('m-name').value=p.name;
+    katSelectFuellen(p.kat);
+    document.getElementById('m-intervall').value=p.intervall;
+    document.getElementById('m-betrag').value=p.betrag;
+    document.getElementById('m-faellig').value=p.faellig;
+    document.getElementById('m-notiz').value=p.notiz;
+  } else {
+    aktuellerTyp='ausgang';
+    typWaehlen('ausgang');
+    ['m-name','m-betrag','m-notiz'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('m-intervall').value='monatlich';
+    document.getElementById('m-faellig').value=heute();
+  }
+  intervallGeaendert();
   document.getElementById('modal-bg').classList.add('offen');
 }
 function modalZu(){document.getElementById('modal-bg').classList.remove('offen');}
@@ -808,9 +986,10 @@ function speichern(){
   const betrag=parseFloat(document.getElementById('m-betrag').value);
   const faellig=document.getElementById('m-faellig').value;
   const notiz=document.getElementById('m-notiz').value.trim();
-  if(!name||isNaN(betrag)||betrag<=0||!faellig){alert('Bitte alle Pflichtfelder ausfüllen (Bezeichnung, Betrag und Fälligkeit).');return;}
-  if(editId){const i=posten.findIndex(p=>p.id===editId);posten[i]={...posten[i],name,kat,intervall,betrag,faellig,notiz};}
-  else posten.push({id:nextId++,name,kat,intervall,betrag,faellig,notiz});
+  const richtung=aktuellerTyp;
+  if(!name||isNaN(betrag)||betrag<=0||!faellig){alert('Bitte alle Pflichtfelder ausfüllen (Bezeichnung, Betrag und Datum).');return;}
+  if(editId){const i=posten.findIndex(p=>p.id===editId);posten[i]={...posten[i],name,kat,intervall,betrag,faellig,notiz,richtung};}
+  else posten.push({id:nextId++,name,kat,intervall,betrag,faellig,notiz,richtung});
   modalZu();update();
 }
 function loeschen(id){const p=posten.find(x=>x.id===id);if(confirm(`"${p.name}" wirklich löschen?`)){posten=posten.filter(x=>x.id!==id);update();}}
